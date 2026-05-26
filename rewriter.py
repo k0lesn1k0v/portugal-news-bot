@@ -10,89 +10,88 @@ logger = logging.getLogger(__name__)
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 SYSTEM_PROMPT = (
-        "Ты — автор новостного Telegram-канала о Португалии для русскоязычной аудитории.\n\n"
-        "Стиль: сухой, фактурный, как Mash или Baza. Ирония — только через сами факты, "
-        "НЕ через твои комментарии. Никакого натужного юмора, никаких шуток, никаких эмодзи.\n\n"
-        "Структура поста:\n"
-        "1. Первое предложение — главный факт, самое цепляющее. Это и есть заголовок. "
-        "Без кавычек, без жирного шрифта. Если есть источник — добавь — СМИ или название издания через тире в конце.\n"
-        "2. Дальше — 1-3 коротких абзаца с деталями и контекстом. Каждый абзац отделён пустой строкой.\n"
-        "3. Если есть конкретные цифры, имена, даты — используй их. Конкретика > обобщения.\n"
-        "4. НЕ ставь хештеги.\n"
-        "5. НЕ используй эмодзи.\n"
-        "6. НЕ используй Markdown-форматирование (жирный, курсив).\n"
-        "7. НЕ добавляй ссылку на источник в текст поста.\n"
-        "8. Пиши на РУССКОМ языке.\n\n"
-        "Формат ответа — ТОЛЬКО текст поста, ничего больше."
+    "Ty - avtor novostnogo Telegram-kanala o Portugalii dlya russkoyazychnoj auditorii.\n\n"
+    "Stil: suhoj, fakturnyj, kak Mash ili Baza. Ironiya - tolko cherez sami fakty, "
+    "NE cherez tvoi kommentarii. Nikakogo natuznogo yumora, nikakikh shutok, nikakikh emodzi.\n\n"
+    "Struktura posta:\n"
+    "1. Pervoe predlozhenie - glavnyj fakt, samoe ceplyayushee. Eto i est zagolovok. "
+    "Bez kavychek, bez zhirnogo shrifta. Esli est istochnik - dobav - SMI ili nazvanie izdaniya cherez tire v konce.\n"
+    "2. Dalshe - 1-3 korotkih abzaca s detalyami i kontekstom. Kazhdyj abzac otdelen pustoj strokoj.\n"
+    "3. Esli est konkretnye cifry, imena, daty - ispolzuj ih. Konkretika > obobsheniya.\n"
+    "4. NE stav heshtegi.\n"
+    "5. NE ispolzuj emodzi.\n"
+    "6. NE ispolzuj Markdown-formatirovanie (zhirnyj, kursiv).\n"
+    "7. NE dobavlyaj ssylku na istochnik v tekst posta.\n"
+    "8. Pishi na RUSSKOM yazyke.\n\n"
+    "Format otveta - TOLKO tekst posta, nichego bolshe."
 )
 
 PICK_BEST_PROMPT = (
-        "Ты — редактор Telegram-канала о Португалии для русскоязычной аудитории.\n"
-        "Из списка новостей выбери ОДНУ самую интересную.\n\n"
-        "Приоритеты (от высшего к низшему):\n"
-        "1. Изменения законов, визовых правил, налогов — всё что влияет на мигрантов и экспатов\n"
-        "2. Кринж, абсурд, курьёзы — странные и смешные случаи из жизни Португалии\n"
-        "3. Криминал, драки, скандалы — всё резонансное\n"
-        "4. Необычные факты и события, которые хочется переслать другу\n\n"
-        "НЕ выбирай:\n"
-        "- Скучные бюрократические новости без конкретного влияния на людей\n"
-        "- Спорт (если это не скандал или курьёз)\n"
-        "- Протокольные встречи политиков\n\n"
-        "Верни ТОЛЬКО номер выбранной новости (число) и ничего больше."
+    "Ty - redaktor Telegram-kanala o Portugalii dlya russkoyazychnoj auditorii.\n"
+    "Iz spiska novostej vyberi ODNU samuyu interesnuyu.\n\n"
+    "Prioritety (ot vysshego k nizshemu):\n"
+    "1. Izmeneniya zakonov, vizovyh pravil, nalogov - vsyo chto vliyaet na migrantov i ekspatov\n"
+    "2. Krinzh, absurd, kuryozy - strannye i smeshnye sluchai iz zhizni Portugalii\n"
+    "3. Kriminal, draki, skandaly - vsyo rezonansnoe\n"
+    "4. Neobychnye fakty i sobytiya, kotorye hochetsya pereslat drugu\n\n"
+    "NE vybiraj:\n"
+    "- Skuchnye byurokraticheskie novosti bez konkretnogo vliyaniya na lyudej\n"
+    "- Sport (esli eto ne skandal ili kuryoz)\n"
+    "- Protokolnye vstrechi politikov\n\n"
+    "Verni TOLKO nomer vybrannoj novosti (chislo) i nichego bolshe."
 )
 
 
-async def pick_best_article(articles: list[dict]) -> int | None:
-        """Use GPT to pick the most interesting article. Returns article ID."""
-        if not articles:
-                    return None
+async def pick_best_article(articles):
+    """Use GPT to pick the most interesting article. Returns article ID."""
+    if not articles:
+        return None
 
-        lines = []
-        for i, a in enumerate(articles):
-                    lines.append(
-                                    "{}. [{}] {}\n   {}".format(i + 1, a["source"], a["title"], a["summary"][:200])
-                    )
-                numbered_list = "\n".join(lines)
+    lines = []
+    for i, a in enumerate(articles):
+        line = "{}. [{}] {}  {}".format(i + 1, a["source"], a["title"], a["summary"][:200])
+        lines.append(line)
+    numbered_list = "\n".join(lines)
 
     try:
-                response = await client.chat.completions.create(
-                                model=OPENAI_MODEL,
-                                messages=[
-                                                    {"role": "system", "content": PICK_BEST_PROMPT},
-                                                    {"role": "user", "content": numbered_list},
-                                ],
-                                temperature=0.3,
-                                max_tokens=10,
-                )
-                choice = response.choices[0].message.content.strip()
-                idx = int(choice) - 1
-                if 0 <= idx < len(articles):
-                                return articles[idx]["id"]
+        response = await client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": PICK_BEST_PROMPT},
+                {"role": "user", "content": numbered_list},
+            ],
+            temperature=0.3,
+            max_tokens=10,
+        )
+        choice = response.choices[0].message.content.strip()
+        idx = int(choice) - 1
+        if 0 <= idx < len(articles):
+            return articles[idx]["id"]
     except (ValueError, IndexError) as e:
         logger.error("Failed to parse GPT pick: %s", e)
-except Exception as e:
+    except Exception as e:
         logger.error("OpenAI pick error: %s", e)
 
     return articles[0]["id"] if articles else None
 
 
-async def rewrite_article(title: str, summary: str, url: str, source: str) -> str | None:
-        """Rewrite an article. Returns the post text."""
-    user_msg = "Источник: {}\nЗаголовок: {}\nТекст: {}\nСсылка: {}".format(
-                source, title, summary, url
+async def rewrite_article(title, summary, url, source):
+    """Rewrite an article. Returns the post text."""
+    user_msg = "Istochnik: {}\nZagolovok: {}\nTekst: {}\nSsylka: {}".format(
+        source, title, summary, url
     )
 
     try:
-                response = await client.chat.completions.create(
-                                model=OPENAI_MODEL,
-                                messages=[
-                                                    {"role": "system", "content": SYSTEM_PROMPT},
-                                                    {"role": "user", "content": user_msg},
-                                ],
-                                temperature=0.8,
-                                max_tokens=500,
-                )
-                return response.choices[0].message.content.strip()
-except Exception as e:
+        response = await client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
+            ],
+            temperature=0.8,
+            max_tokens=500,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
         logger.error("OpenAI rewrite error: %s", e)
         return None
